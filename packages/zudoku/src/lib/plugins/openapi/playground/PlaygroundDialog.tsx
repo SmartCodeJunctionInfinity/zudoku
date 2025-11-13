@@ -1,5 +1,6 @@
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { type PropsWithChildren, useState } from "react";
+import { useAuth } from "zudoku/hooks";
 import {
   Dialog,
   DialogContent,
@@ -35,6 +36,9 @@ const HeroPlayIcon = ({
 
 const PlaygroundDialog = (props: PlaygroundDialogProps) => {
   const [open, setOpen] = useState(false);
+  const { isAuthEnabled, login, signup, isPending, isAuthenticated } =
+    useAuth();
+
   return (
     <Dialog onOpenChange={(open) => setOpen(open)}>
       <DialogTrigger asChild>
@@ -50,14 +54,21 @@ const PlaygroundDialog = (props: PlaygroundDialogProps) => {
       </DialogTrigger>
 
       <DialogContent
-        className="max-w-screen-xl w-full overflow-hidden p-0"
+        className="max-w-screen-xl! w-full overflow-hidden p-0"
         aria-describedby={undefined}
         showCloseButton={true}
       >
         <VisuallyHidden>
           <DialogTitle>Playground</DialogTitle>
         </VisuallyHidden>
-        {open && <Playground {...props} />}
+        {open && (
+          <Playground
+            requiresLogin={isAuthEnabled && !isAuthenticated && !isPending}
+            onLogin={() => login()}
+            onSignUp={() => signup()}
+            {...props}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

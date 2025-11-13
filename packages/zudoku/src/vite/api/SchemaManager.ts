@@ -5,6 +5,7 @@ import {
   type JSONSchema,
 } from "@apidevtools/json-schema-ref-parser";
 import { upgrade, validate } from "@scalar/openapi-parser";
+import slugify from "@sindresorhus/slugify";
 import { merge as mergeAllOf } from "allof-merge";
 import colors from "picocolors";
 import type { LoadedConfig } from "../../config/config.js";
@@ -25,8 +26,8 @@ export class SchemaManager {
   private processors: Processor[];
   private processedSchemas: Record<string, ProcessedSchema[]> = {};
   private fileToPath: Map<string, string> = new Map();
+  private referencedBy = new Map<string, Set<string>>();
   public config: LoadedConfig;
-  public trackedFiles = new Set<string>();
   public schemaMap = new Map<
     string,
     { filePath: string; processedTime: number }
@@ -44,14 +45,14 @@ export class SchemaManager {
     this.storeDir = storeDir;
     this.config = config;
     this.processors = [
-      ({ schema }) => upgrade(schema).specification,
+      ({ schema }) => upgrade(schema).specification as OpenAPIDocument,
       ({ schema, file }) => {
         try {
           return mergeAllOf(schema, {
             onMergeError: (message, path) => {
               throw new Error(`${message} at '${path.join(".")}'`);
             },
-          });
+          }) as OpenAPIDocument;
         } catch (error) {
           // biome-ignore lint/suspicious/noConsole: Logging allowed here
           console.warn(
@@ -90,8 +91,8 @@ export class SchemaManager {
 
   public processSchema = async (input: string) => {
     const filePath = path.resolve(this.config.__meta.rootDir, input);
-    const pathId = this.getPathForFile(filePath);
-    if (!pathId) {
+    const configuredPath = this.getPathForFile(filePath);
+    if (!configuredPath) {
       // biome-ignore lint/suspicious/noConsole: Logging allowed here
       console.warn(`No path found for file ${input}`);
       return;
@@ -102,7 +103,17 @@ export class SchemaManager {
       dereference: { preservedProperties: ["description", "summary"] },
     });
 
-    parser.$refs.paths().forEach((file) => this.trackedFiles.add(file));
+    this.referencedBy.set(filePath, new Set());
+
+    parser.$refs
+      .paths()
+      .filter((file) => file !== filePath)
+      .forEach((file) => {
+        if (!this.referencedBy.has(file)) {
+          this.referencedBy.set(file, new Set());
+        }
+        this.referencedBy.get(file)?.add(filePath);
+      });
 
     const validatedSchema = await this.validateSchema(schema, filePath);
     const processedSchema = await this.processors.reduce(
@@ -121,9 +132,12 @@ export class SchemaManager {
     const processedTime = Date.now();
     const code = await generateCode(processedSchema, filePath);
 
+    // Create a unique filename using the configuredPath to avoid collisions
+    // when multiple APIs use the same basename (e.g., index.json)
+    const prefixPath = slugify(configuredPath, { separator: "_" });
     const processedFilePath = path.posix.join(
       this.storeDir,
-      `${path.basename(filePath)}.js`,
+      `${prefixPath}-${path.basename(filePath)}.js`,
     );
     await fs.writeFile(processedFilePath, code);
     this.schemaMap.set(filePath, {
@@ -137,24 +151,35 @@ export class SchemaManager {
       inputPath: filePath,
     } satisfies ProcessedSchema;
 
-    const schemas = this.processedSchemas[pathId];
+    const schemas = this.processedSchemas[configuredPath];
 
     if (!schemas) {
-      throw new Error(`No schemas found for navigation ID ${pathId}.`);
+      throw new Error(`No schemas found for navigation ID ${configuredPath}.`);
     }
 
     const index = schemas.findIndex((s) => s.inputPath === filePath);
     if (index > -1) {
       schemas[index] = processed;
     }
-    this.fileToPath.set(filePath, pathId);
+    this.fileToPath.set(filePath, configuredPath);
     return processed;
+  };
+
+  public getAllTrackedFiles = () => Array.from(this.referencedBy.keys());
+
+  public getFilesToReprocess = (changedFile: string) => {
+    const resolvedPath = path.resolve(this.config.__meta.rootDir, changedFile);
+    const referencedBy = this.referencedBy.get(resolvedPath);
+
+    if (!referencedBy) return [];
+    if (referencedBy.size === 0) return [resolvedPath];
+    return Array.from(referencedBy);
   };
 
   public processAllSchemas = async () => {
     this.schemaMap.clear();
-    this.trackedFiles.clear();
     this.fileToPath.clear();
+    this.referencedBy.clear();
     this.processedSchemas = {};
 
     const apis = ensureArray(this.config.apis ?? []);

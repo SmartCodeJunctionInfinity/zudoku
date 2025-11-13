@@ -39,6 +39,10 @@ export const OperationsFragment = graphql(/* GraphQL */ `
     path
     deprecated
     extensions
+    servers {
+      url
+      description
+    }
     parameters {
       name
       in
@@ -130,10 +134,12 @@ const OperationsForTagQuery = graphql(/* GraphQL */ `
         next {
           name
           slug
+          extensions
         }
         prev {
           name
           slug
+          extensions
         }
       }
     }
@@ -159,7 +165,10 @@ export const OperationList = ({
   const {
     data: { schema },
   } = result;
-  const { selectedServer } = useSelectedServer(schema.servers);
+  // Global server selection for the dropdown UI
+  const { selectedServer: globalSelectedServer } = useSelectedServer(
+    schema.servers,
+  );
   const title = schema.title;
   const summary = schema.summary;
   const description = schema.description;
@@ -209,11 +218,19 @@ export const OperationList = ({
     (hasMultipleVersions && options?.showVersionSelect !== "hide");
 
   const paginationProps = {
-    prev: prev?.name ? { to: `../${prev.slug}`, label: prev.name } : undefined,
+    prev: prev
+      ? {
+          to: `../${prev.slug}`,
+          label: prev.extensions?.["x-displayName"] ?? prev.name,
+        }
+      : undefined,
     next: next
       ? {
           to: `../${next.slug ?? UNTAGGED_PATH}`,
-          label: next.name ?? "Other endpoints",
+          label:
+            next.extensions?.["x-displayName"] ??
+            next.name ??
+            "Other endpoints",
         }
       : undefined,
   };
@@ -233,8 +250,12 @@ export const OperationList = ({
           <meta name="description" content={metaDescription} />
         )}
       </Helmet>
+
       <div className="mb-8">
-        <Collapsible className="w-full">
+        <Collapsible
+          className="w-full"
+          defaultOpen={options?.expandApiInformation}
+        >
           <div className="flex flex-col gap-y-4 sm:flex-row justify-around items-start sm:items-end">
             <div className="flex flex-col flex-1 gap-2">
               <CategoryHeading>{title}</CategoryHeading>
@@ -314,8 +335,8 @@ export const OperationList = ({
         {operations.map((fragment) => (
           <div key={fragment.slug}>
             <OperationListItem
-              serverUrl={selectedServer}
               operationFragment={fragment}
+              globalSelectedServer={globalSelectedServer}
             />
             <hr className="my-10" />
           </div>

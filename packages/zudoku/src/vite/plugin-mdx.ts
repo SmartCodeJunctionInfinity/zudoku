@@ -12,9 +12,11 @@ import remarkDirectiveRehype from "remark-directive-rehype";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 import remarkMdxFrontmatter from "remark-mdx-frontmatter";
+import type { PluggableList } from "unified";
 import { EXIT, visit } from "unist-util-visit";
 import type { Plugin } from "vite";
 import { getCurrentConfig } from "../config/loader.js";
+import { getBuildConfig } from "../config/validators/BuildSchema.js";
 import { createConfiguredShikiRehypePlugins } from "../lib/shiki.js";
 import { remarkInjectFilepath } from "./mdx/remark-inject-filepath.js";
 import { remarkLastModified } from "./mdx/remark-last-modified.js";
@@ -75,8 +77,49 @@ const rehypeExcerptWithMdxExport = () => (tree: HastRoot) => {
   tree.children.unshift(exportMdxjsConst("excerpt", excerpt));
 };
 
-const viteMdxPlugin = (): Plugin => {
+const viteMdxPlugin = async (): Promise<Plugin> => {
   const config = getCurrentConfig();
+  const buildConfig = await getBuildConfig();
+
+  const defaultRemarkPlugins = [
+    remarkStaticGeneration,
+    [remarkInjectFilepath, config.__meta.rootDir],
+    remarkComment,
+    remarkGfm,
+    remarkFrontmatter,
+    // ---  important:
+    // this must be sandwiched between remarkFrontmatter and remarkMdxFrontmatter
+    remarkLastModified,
+    // ---
+    remarkMdxFrontmatter,
+    remarkDirective,
+    remarkDirectiveRehype,
+    [remarkLinkRewrite, config.basePath],
+    [remarkNormalizeImageUrl, config.basePath],
+    ...(config.build?.remarkPlugins ?? []),
+  ] satisfies PluggableList;
+
+  const remarkPlugins =
+    typeof buildConfig?.remarkPlugins === "function"
+      ? buildConfig.remarkPlugins(defaultRemarkPlugins)
+      : [...defaultRemarkPlugins, ...(buildConfig?.remarkPlugins ?? [])];
+
+  const defaultRehypePlugins = [
+    rehypeSlug,
+    withToc,
+    withTocExport,
+    rehypeExcerptWithMdxExport,
+    rehypeNormalizeMdxImages,
+    rehypeMdxImportMedia,
+    rehypeMetaAsAttributes,
+    ...createConfiguredShikiRehypePlugins(config.syntaxHighlighting?.themes),
+    ...(config.build?.rehypePlugins ?? []),
+  ] satisfies PluggableList;
+
+  const rehypePlugins =
+    typeof buildConfig?.rehypePlugins === "function"
+      ? buildConfig.rehypePlugins(defaultRehypePlugins)
+      : [...defaultRehypePlugins, ...(buildConfig?.rehypePlugins ?? [])];
 
   return {
     enforce: "pre",
@@ -87,36 +130,8 @@ const viteMdxPlugin = (): Plugin => {
           : "zudoku/components",
       mdxExtensions: [".mdx"],
       format: "detect",
-      remarkPlugins: [
-        remarkStaticGeneration,
-        [remarkInjectFilepath, config.__meta.rootDir],
-        remarkComment,
-        remarkGfm,
-        remarkFrontmatter,
-        // ---  important:
-        // this must be sandwiched between remarkFrontmatter and remarkMdxFrontmatter
-        remarkLastModified,
-        // ---
-        remarkMdxFrontmatter,
-        remarkDirective,
-        remarkDirectiveRehype,
-        [remarkLinkRewrite, config.basePath],
-        [remarkNormalizeImageUrl, config.basePath],
-        ...(config.build?.remarkPlugins ?? []),
-      ],
-      rehypePlugins: [
-        rehypeSlug,
-        withToc,
-        withTocExport,
-        rehypeExcerptWithMdxExport,
-        rehypeNormalizeMdxImages,
-        rehypeMdxImportMedia,
-        rehypeMetaAsAttributes,
-        ...createConfiguredShikiRehypePlugins(
-          config.syntaxHighlighting?.themes,
-        ),
-        ...(config.build?.rehypePlugins ?? []),
-      ],
+      remarkPlugins,
+      rehypePlugins,
     }),
     name: "zudoku-mdx-plugin",
   } as const;

@@ -18,7 +18,7 @@ jobs:
       ZUDOKU_INTERNAL_DEV: true
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - uses: pnpm/action-setup@v4
@@ -26,7 +26,7 @@ jobs:
           run_install: false
 
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: ".tool-versions"
           registry-url: "https://registry.npmjs.org"
@@ -56,7 +56,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
 
       - name: Build Examples
-        run: nx run-many -t build --projects=tag:example
+        run: nx run-many -t build --projects=tag:example --exclude=mermaid
 
         # Check if the stats file exists, if zudoku doesn't change in the PR
         # the stats file won't exist and we don't need to upload it
@@ -69,13 +69,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
         with:
           run_install: false
 
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: ".tool-versions"
           registry-url: "https://registry.npmjs.org"
@@ -89,21 +89,20 @@ jobs:
       - run: nx run docs:build
 
       - name: Restore lychee cache
-        id: cache-lychee
+        id: restore-cache
         uses: actions/cache/restore@v4
         with:
-          path: docs/.lycheecache
-          key: lychee-cache-${{ hashFiles('docs/.lycheecache') }}
-          restore-keys: |
-            lychee-cache-
+          path: .lycheecache
+          key: cache-lychee-v3-${{ github.sha }}
+          restore-keys: cache-lychee-v2-
 
       - name: Link Checker
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --fallback-extensions html --cache --config ./docs/lychee.toml --root-dir $PWD/docs/dist --include-fragments ./docs/dist
+          args: --fallback-extensions html --cache --max-cache-age 1d --config ./docs/lychee.toml --root-dir $PWD/docs/dist --include-fragments ./docs/dist
       - name: Save lychee cache
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: docs/.lycheecache
-          key: lychee-cache-${{ hashFiles('docs/.lycheecache') }}
+          path: .lycheecache
+          key: cache-lychee-v3-${{ github.sha }}

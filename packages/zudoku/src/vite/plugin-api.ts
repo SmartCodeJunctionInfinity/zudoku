@@ -3,12 +3,10 @@ import path from "node:path";
 import { deepEqual } from "fast-equals";
 import { type Plugin, runnerImport } from "vite";
 import { ZuploEnv } from "../app/env.js";
-import { fileExists } from "../config/file-exists.js";
 import { getCurrentConfig } from "../config/loader.js";
 import {
-  type BuildConfig,
+  getBuildConfig,
   type Processor,
-  validateBuildConfig,
 } from "../config/validators/BuildSchema.js";
 import {
   getAllOperations,
@@ -37,23 +35,8 @@ const viteApiPlugin = async (): Promise<Plugin> => {
       ).then((m) => m.module.default(initialConfig.__meta.rootDir))
     : [];
 
-  const buildFilePath = path.join(
-    initialConfig.__meta.rootDir,
-    "zudoku.build.ts",
-  );
-  const buildFileExists = await fileExists(buildFilePath);
-
-  let buildProcessors: Processor[] = [];
-  let buildConfig: BuildConfig | undefined;
-
-  if (buildFileExists) {
-    const buildModule = await runnerImport<{ default: BuildConfig }>(
-      buildFilePath,
-    ).then((m) => m.module.default);
-
-    buildConfig = validateBuildConfig(buildModule);
-    buildProcessors = buildConfig?.processors ?? [];
-  }
+  const buildConfig = await getBuildConfig();
+  const buildProcessors = buildConfig?.processors ?? [];
 
   const tmpStoreDir = path.posix.join(
     initialConfig.__meta.rootDir,
@@ -75,17 +58,25 @@ const viteApiPlugin = async (): Promise<Plugin> => {
 
       await schemaManager.processAllSchemas();
 
-      schemaManager.trackedFiles.forEach((file) => this.addWatchFile(file));
+      schemaManager
+        .getAllTrackedFiles()
+        .forEach((file) => this.addWatchFile(file));
     },
     configureServer(server) {
       server.watcher.on("change", async (id) => {
-        if (!schemaManager.trackedFiles.has(id)) return;
+        const mainFiles = schemaManager.getFilesToReprocess(id);
+        if (mainFiles.length === 0) return;
 
         // biome-ignore lint/suspicious/noConsole: Logging allowed here
         console.log(`Re-processing schema ${id}`);
 
-        await schemaManager.processSchema(id);
-        schemaManager.trackedFiles.forEach((file) => server.watcher.add(file));
+        for (const mainFile of mainFiles) {
+          await schemaManager.processSchema(mainFile);
+        }
+        schemaManager
+          .getAllTrackedFiles()
+          .forEach((file) => server.watcher.add(file));
+
         invalidateNavigation(server);
         reload(server);
       });
@@ -103,7 +94,9 @@ const viteApiPlugin = async (): Promise<Plugin> => {
       if (!deepEqual(schemaManager.config.apis, config.apis)) {
         schemaManager.config = config;
         await schemaManager.processAllSchemas();
-        schemaManager.trackedFiles.forEach((file) => this.addWatchFile(file));
+        schemaManager
+          .getAllTrackedFiles()
+          .forEach((file) => this.addWatchFile(file));
       }
 
       if (config.__meta.mode === "standalone") {
@@ -184,6 +177,7 @@ const viteApiPlugin = async (): Promise<Plugin> => {
               `    disableSidecar: config.defaults?.apis?.disableSidecar,`,
               `    showVersionSelect: config.defaults?.apis?.showVersionSelect ?? "if-available",`,
               `    expandAllTags: config.defaults?.apis?.expandAllTags ?? true,`,
+              `    expandApiInformation: config.defaults?.apis?.expandApiInformation ?? false,`,
               `    transformExamples: config.defaults?.apis?.transformExamples,`,
               `    ...(apis[${apiIndex}].options ?? {}),`,
               `  },`,

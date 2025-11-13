@@ -22,22 +22,23 @@ exclude = [
   "github.com/zuplo/zudoku/edit/(.*)",
   "github.com/zuplo/zudoku/issues",
   "github.com/zuplo/zudoku",
-  "https://zudoku.dev/docs/400",
-  "https://zudoku.dev/docs/404",
-  "https://zudoku.dev/docs/500",
-  "https://zudoku.dev/400",
-  "https://zudoku.dev/404",
-  "https://zudoku.dev/500",
   "stackoverflow.com",
   "dashboard.clerk.com",
   "openid.net",
   "manage.auth0.com",
+  # Browser redirect seems to work correctly
+  "https://docs.pingidentity.com/pingfederate/",
 
   "https://portal.azure.com/",
+  "github\\.com\\/([^#]+)#L\\d+(-L\\d+)?",
 
   # For some reason we see these false negatives:
   # > Network error: error sending request for url (https://shiki.style/themes) Maybe a certificate error?
   "https://shiki.style/",
+]
+
+exclude_path = [
+  "\\.(md|txt)$",
 ]
 
 # Headers to send with requests
