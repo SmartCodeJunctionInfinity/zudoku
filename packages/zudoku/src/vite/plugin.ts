@@ -11,6 +11,8 @@ import { viteConfigReloadPlugin } from "./plugin-config-reload.js";
 import viteCustomPagesPlugin from "./plugin-custom-pages.js";
 import viteDocsPlugin from "./plugin-docs.js";
 import { viteFrontmatterPlugin } from "./plugin-frontmatter.js";
+import viteLlmsTxtPlugin from "./plugin-llms-txt.js";
+import viteLlmsTxtConfigPlugin from "./plugin-llms-txt-config.js";
 import viteMarkdownExportPlugin from "./plugin-markdown-export.js";
 import viteMdxPlugin from "./plugin-mdx.js";
 import { viteNavigationPlugin } from "./plugin-navigation.js";
@@ -34,6 +36,8 @@ export default function vitePlugin(): PluginOption {
     viteNavigationPlugin(),
     viteApiPlugin(),
     viteSearchPlugin(),
+    viteLlmsTxtPlugin(),
+    viteLlmsTxtConfigPlugin(),
     viteAliasPlugin(),
     viteRedirectPlugin(),
     viteMarkdownExportPlugin(),

@@ -325,6 +325,29 @@ const SearchSchema = z
   ])
   .optional();
 
+const LlmsTxtConfigSchema = z
+  .object({
+    title: z.string().optional(),
+    description: z.string().optional(),
+    includeOptionalSection: z.boolean().optional(),
+    customSections: z
+      .array(
+        z.object({
+          title: z.string(),
+          items: z.array(
+            z.object({
+              title: z.string(),
+              url: z.string(),
+              description: z.string().optional(),
+            }),
+          ),
+          optional: z.boolean().optional(),
+        }),
+      )
+      .optional(),
+  })
+  .optional();
+
 const AuthenticationSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("clerk"),
@@ -554,6 +577,7 @@ const BaseConfigSchema = z.object({
   authentication: AuthenticationSchema,
   search: SearchSchema,
   docs: DocsConfigSchema.optional(),
+  llmsTxt: LlmsTxtConfigSchema,
   apis: z.union([ApiSchema, z.array(ApiSchema)]),
   catalogs: z.union([ApiCatalogSchema, z.array(ApiCatalogSchema)]),
   apiKeys: ApiKeysSchema,
@@ -574,6 +598,7 @@ export const ZudokuConfig = BaseConfigSchema.partial();
 export type ZudokuApiConfig = z.infer<typeof ApiSchema>;
 export type ZudokuSiteMapConfig = z.infer<typeof SiteMapSchema>;
 export type ZudokuDocsConfig = z.infer<typeof DocsConfigSchema>;
+export type ZudokuLlmsTxtConfig = z.infer<typeof LlmsTxtConfigSchema>;
 export type ZudokuLlmsConfig = z.infer<typeof LlmsConfigSchema>;
 export type ZudokuRedirect = z.infer<typeof Redirect>;
 
