@@ -83,7 +83,7 @@ const viteLlmsTxtPlugin = (): Plugin => {
             });
           } catch (error) {
             // Skip files that can't be read or parsed
-            // console.warn(`Could not process file ${file}:`, error);
+            console.warn(`Could not process file ${file}:`, error);
           }
         }
       }
